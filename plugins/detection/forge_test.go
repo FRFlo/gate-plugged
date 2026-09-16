@@ -342,6 +342,38 @@ func testParseBrandEmpty(t *testing.T) {
 	}
 }
 
+func TestContainsFabricChannels(t *testing.T) {
+	for _, payload := range []string{"fabric:registry", "fabric-loader:main", "fabricloader\x00minecraft:brand"} {
+		if !ContainsFabricChannels(payload) {
+			t.Errorf("ContainsFabricChannels(%q) = false, want true", payload)
+		}
+	}
+	if ContainsFabricChannels("minecraft:brand\x00forge:hand") {
+		t.Error("non-Fabric channels incorrectly identified")
+	}
+}
+
+func TestSpoofedBrandDetection(t *testing.T) {
+	player := newDetectedPlayer(uuid.New())
+	cfg := DetectionConfig{Forge: ForgeConfig{Enabled: true, Spoofing: ForgeSpoofing{Enabled: true, Actions: []string{"alert"}}}}
+	history := NewMessageHistory()
+
+	brand := HandleBrandPayload(player, history, "vanilla", cfg, false)
+	if brand.SpoofedBrandDetected {
+		t.Error("spoofing detected before Fabric channels")
+	}
+	register := HandleChannelRegister(player, history, "fabric:registry", nil, cfg, false)
+	if !register.SpoofedBrandDetected || len(register.SpoofedBrandActionIDs) != 1 {
+		t.Fatalf("spoofing result = %#v, want detection with one action", register)
+	}
+	if !player.HasGenericCheck("spoofed_brand") {
+		t.Error("spoofed_brand check was not recorded")
+	}
+	if again := HandleChannelRegister(player, history, "fabric:registry", nil, cfg, false); again.SpoofedBrandDetected {
+		t.Error("spoofing detection retriggered")
+	}
+}
+
 func testParseChannelsBasic(t *testing.T) {
 	channels := []string{
 		"forgewurst:network",

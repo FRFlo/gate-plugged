@@ -84,6 +84,8 @@ type DetectedPlayer struct {
 	forgeMods       map[string]ForgeModInfo
 	forgeModsKnown  bool
 	forgeClientType *ForgeClientType
+	brand           string
+	fabricChannels  bool
 	bedrockDetected bool
 	pendingActions  []func()
 }
@@ -255,6 +257,39 @@ func (p *DetectedPlayer) IsBedrockDetected() bool {
 	v := p.bedrockDetected
 	p.mu.RUnlock()
 	return v
+}
+
+// SetBrand records the latest client brand reported by Gate.
+func (p *DetectedPlayer) SetBrand(brand string) {
+	p.mu.Lock()
+	p.brand = brand
+	p.mu.Unlock()
+}
+
+// MarkFabricChannels records that Fabric loader channels were advertised.
+func (p *DetectedPlayer) MarkFabricChannels() {
+	p.mu.Lock()
+	p.fabricChannels = true
+	p.mu.Unlock()
+}
+
+// TryMarkSpoofedBrand atomically records the Fabric/vanilla brand spoof check
+// once both public Gate events have supplied the required evidence.
+func (p *DetectedPlayer) TryMarkSpoofedBrand(enabled bool) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !enabled || p.fabricChannels == false || p.brand == "" {
+		return false
+	}
+	brand := strings.ToLower(strings.TrimSpace(p.brand))
+	if brand != "vanilla" && brand != "minecraft" {
+		return false
+	}
+	if _, exists := p.genericChecks["spoofed_brand"]; exists {
+		return false
+	}
+	p.genericChecks["spoofed_brand"] = struct{}{}
+	return true
 }
 
 // --- Pending actions ---

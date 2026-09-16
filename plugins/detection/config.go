@@ -104,6 +104,15 @@ type ForgeConfig struct {
 	// ModActions maps mod ID → list of action IDs triggered for that mod.
 	ModActions map[string][]string `toml:"mod_actions"`
 	Category   ForgeCategory       `toml:"category"`
+	Spoofing   ForgeSpoofing       `toml:"spoofing"`
+}
+
+// ForgeSpoofing controls detection of clients claiming a vanilla brand while
+// advertising Fabric channels. Active packet probing is not part of Gate's
+// public plugin API and is therefore intentionally not represented here.
+type ForgeSpoofing struct {
+	Enabled bool     `toml:"enabled"`
+	Actions []string `toml:"actions"`
 }
 
 // ForgeSettings holds display/mark settings for forge.toml [settings].

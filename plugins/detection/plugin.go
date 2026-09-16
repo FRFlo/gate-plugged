@@ -160,6 +160,18 @@ func onBrandEvent(
 			})
 		}
 
+		if result.SpoofedBrandDetected {
+			log.Info("spoofed brand detection", "player", e.Player().Username(), "action_count", len(result.SpoofedBrandActionIDs))
+		}
+		if len(result.SpoofedBrandActionIDs) > 0 {
+			actionIDs := result.SpoofedBrandActionIDs
+			player.QueuePendingAction(func() {
+				ctx := actCtx
+				ctx.CheckName = "Spoofed Brand (Fabric)"
+				executor.Execute(actionIDs, ctx, buildCallbacks(log, e.Player(), cfgHolder))
+			})
+		}
+
 		if result.BedrockDetected && len(result.BedrockActionIDs) > 0 {
 			label := result.BedrockLabel
 			actionIDs := result.BedrockActionIDs
@@ -226,6 +238,18 @@ func onChannelRegisterEvent(
 				actCtx := actCtx
 				actCtx.CheckName = triggerName
 				executor.Execute(actionIDs, actCtx, buildCallbacks(log, e.Player(), cfgHolder))
+			})
+		}
+
+		if result.SpoofedBrandDetected {
+			log.Info("spoofed brand detection", "player", e.Player().Username(), "action_count", len(result.SpoofedBrandActionIDs))
+		}
+		if len(result.SpoofedBrandActionIDs) > 0 {
+			actionIDs := result.SpoofedBrandActionIDs
+			player.QueuePendingAction(func() {
+				ctx := actCtx
+				ctx.CheckName = "Spoofed Brand (Fabric)"
+				executor.Execute(actionIDs, ctx, buildCallbacks(log, e.Player(), cfgHolder))
 			})
 		}
 	}

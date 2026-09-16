@@ -58,6 +58,26 @@ func ParseClientTypeFromBrand(brand string) (ForgeClientType, bool) {
 	return 0, false
 }
 
+// ContainsFabricChannels reports whether a REGISTER payload advertises Fabric
+// loader channels. This deliberately runs before the Forge mod namespace
+// filtering, because Fabric is evidence for brand-spoof detection.
+func ContainsFabricChannels(message string) bool {
+	if message == "" {
+		return false
+	}
+	parts := strings.Fields(message)
+	if strings.ContainsRune(message, 0) {
+		parts = strings.Split(message, "\x00")
+	}
+	for _, part := range parts {
+		channel := strings.ToLower(strings.TrimSpace(part))
+		if strings.HasPrefix(channel, "fabric-") || strings.HasPrefix(channel, "fabric:") || strings.HasPrefix(channel, "fabricloader") {
+			return true
+		}
+	}
+	return false
+}
+
 // ─── Channel REGISTER parser (fallback mod list) ──────────────────────────────
 
 // ParseModsFromChannels extracts Forge mod IDs from a list of channel identifiers

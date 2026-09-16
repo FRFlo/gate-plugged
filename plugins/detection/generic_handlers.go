@@ -25,7 +25,9 @@ type BrandHandlerResult struct {
 	// BedrockLabel is the human-readable label from BedrockConfig.Label.
 	BedrockLabel string
 	// BedrockActionIDs are the action IDs from BedrockConfig.Actions.
-	BedrockActionIDs []string
+	BedrockActionIDs      []string
+	SpoofedBrandDetected  bool
+	SpoofedBrandActionIDs []string
 }
 
 // ChannelHandlerResult is the aggregate output of HandleChannelRegister.
@@ -33,7 +35,9 @@ type ChannelHandlerResult struct {
 	// GenericTriggers are generic checks that matched the register channel.
 	GenericTriggers []GenericCheckTrigger
 	// ForgeTriggers are forge mod triggers derived from channel namespaces.
-	ForgeTriggers []ForgeActionTrigger
+	ForgeTriggers         []ForgeActionTrigger
+	SpoofedBrandDetected  bool
+	SpoofedBrandActionIDs []string
 }
 
 // ─── Brand payload handler ────────────────────────────────────────────────────
@@ -63,6 +67,7 @@ func HandleBrandPayload(
 	bypass bool,
 ) BrandHandlerResult {
 	var result BrandHandlerResult
+	player.SetBrand(brand)
 
 	// ── 1. Generic checks ────────────────────────────────────────────────────
 	if cfg.Generic.Enabled {
@@ -126,6 +131,12 @@ func HandleBrandPayload(
 			}
 		}
 	}
+	if cfg.Forge.Enabled && player.TryMarkSpoofedBrand(cfg.Forge.Spoofing.Enabled) {
+		result.SpoofedBrandDetected = true
+		if !bypass {
+			result.SpoofedBrandActionIDs = append([]string(nil), cfg.Forge.Spoofing.Actions...)
+		}
+	}
 
 	return result
 }
@@ -160,6 +171,18 @@ func HandleChannelRegister(
 	bypass bool,
 ) ChannelHandlerResult {
 	var result ChannelHandlerResult
+	fabricChannels := ContainsFabricChannels(rawPayload)
+	if !fabricChannels {
+		for _, channel := range channels {
+			if ContainsFabricChannels(channel) {
+				fabricChannels = true
+				break
+			}
+		}
+	}
+	if fabricChannels {
+		player.MarkFabricChannels()
+	}
 
 	// ── 1. Generic checks (using raw payload as message) ─────────────────────
 	if cfg.Generic.Enabled {
@@ -210,6 +233,12 @@ func HandleChannelRegister(
 				}
 			}
 			result.ForgeTriggers = append(result.ForgeTriggers, triggers...)
+		}
+	}
+	if cfg.Forge.Enabled && player.TryMarkSpoofedBrand(cfg.Forge.Spoofing.Enabled) {
+		result.SpoofedBrandDetected = true
+		if !bypass {
+			result.SpoofedBrandActionIDs = append([]string(nil), cfg.Forge.Spoofing.Actions...)
 		}
 	}
 
