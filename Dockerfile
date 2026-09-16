@@ -22,8 +22,12 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -ldflags="-s -w" -a -o gate gate.go
 
 # Move binary into final image
-FROM gcr.io/distroless/static-debian11 AS app
+# The Go build currently produces a dynamically linked executable (the
+# embedded Gate dependencies use purego). Use the distroless base image so
+# the required ELF loader is present at runtime.
+FROM gcr.io/distroless/base-debian12 AS app
 COPY --from=build /workspace/gate /
+COPY --from=build /workspace/HackedServer/hackedserver-core/src/main/resources /HackedServer/hackedserver-core/src/main/resources
 COPY config.yml /
 COPY plugged.yml /
 WORKDIR /
