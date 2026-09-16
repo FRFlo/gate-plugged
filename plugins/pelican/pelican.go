@@ -3,14 +3,17 @@ package pelican
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/go-logr/logr"
 	"github.com/minekube/gate-plugin-template/util/chatfmt"
 	"github.com/robinbraemer/event"
 	"go.minekube.com/gate/pkg/edition/java/proxy"
-	"time"
 )
 
 var wakeSent = make(map[string]time.Time)
+var wakeSentMu sync.Mutex
 
 var Plugin = proxy.Plugin{
 	Name: "Pelican",
@@ -45,14 +48,19 @@ func onKickedFromServerEvent(log logr.Logger, cfg *Config, c *HttpClient) func(*
 		}
 
 		if s, ok := cfg.Servers[e.Server().ServerInfo().Name()]; ok {
-			if _, ok := wakeSent[s]; ok {
-				if time.Since(wakeSent[s]) < 30*time.Second {
+			wakeSentMu.Lock()
+			lastWake, alreadySent := wakeSent[s]
+			wakeSentMu.Unlock()
+			if alreadySent {
+				if time.Since(lastWake) < 30*time.Second {
 					log.Info("Already sent wake to Pelican", "server", e.Server().ServerInfo().Name(), "pelican", s)
 					result := &proxy.RedirectPlayerKickResult{Message: chatfmt.Render("Pelican", cfg.Prefix, cfg.Messages.ServerStartingWait)}
 					e.SetResult(result)
 					return
 				} else {
+					wakeSentMu.Lock()
 					delete(wakeSent, s)
+					wakeSentMu.Unlock()
 				}
 			}
 
@@ -68,7 +76,9 @@ func onKickedFromServerEvent(log logr.Logger, cfg *Config, c *HttpClient) func(*
 
 			result := &proxy.RedirectPlayerKickResult{Message: chatfmt.Render("Pelican", cfg.Prefix, cfg.Messages.StartingServer)}
 			e.SetResult(result)
+			wakeSentMu.Lock()
 			wakeSent[s] = time.Now()
+			wakeSentMu.Unlock()
 		}
 	}
 }

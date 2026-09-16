@@ -4,13 +4,18 @@ import (
 	"context"
 	"encoding/hex"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-logr/logr"
 	sharedcfg "github.com/minekube/gate-plugin-template/plugins/sharedconfig"
+	"github.com/minekube/gate-plugin-template/util/mini"
 	"github.com/robinbraemer/event"
+	"go.minekube.com/common/minecraft/component"
+	"go.minekube.com/gate/pkg/command"
 	"go.minekube.com/gate/pkg/edition/java/proxy"
 	"go.minekube.com/gate/pkg/edition/java/proxy/message"
+	"go.minekube.com/gate/pkg/util/permission"
 )
 
 // Plugin is the Detection Gate plugin.
@@ -20,6 +25,8 @@ var Plugin = proxy.Plugin{
 	Name: "Detection",
 	Init: initDetection,
 }
+
+var detectionProxy *proxy.Proxy
 
 // initDetection is the full plugin initialisation flow.
 //
@@ -31,6 +38,7 @@ var Plugin = proxy.Plugin{
 //  5. Register /detection command (alias /hs)
 //  6. Subscribe all event handlers
 func initDetection(ctx context.Context, p *proxy.Proxy) error {
+	detectionProxy = p
 	log := logr.FromContextOrDiscard(ctx)
 	log.Info("Detection plugin loading...")
 	if rootCfg, err := sharedcfg.Load(); err == nil {
@@ -41,9 +49,18 @@ func initDetection(ctx context.Context, p *proxy.Proxy) error {
 	}
 
 	// ── 1. Resolve submodule resources directory ──────────────────────────────
-	baseDir, err := os.Getwd()
-	if err != nil {
-		return err
+	var err error
+	baseDir := os.Getenv("DETECTION_BASE_DIR")
+	if baseDir == "" {
+		baseDir, err = os.Getwd()
+		if err != nil {
+			return err
+		}
+		if _, statErr := os.Stat(filepath.Join(baseDir, submoduleResourcesDir)); os.IsNotExist(statErr) {
+			if executable, exeErr := os.Executable(); exeErr == nil {
+				baseDir = filepath.Dir(executable)
+			}
+		}
 	}
 	resourcesDir, err := resourcesDirFromBaseDir(baseDir)
 	if err != nil {
@@ -72,23 +89,23 @@ func initDetection(ctx context.Context, p *proxy.Proxy) error {
 
 	// ── 5. Register /detection command (alias /hs) ────────────────────────────
 	p.Command().RegisterWithAliases(
-		newDetectionCommand(p, store, cfgHolder),
+		newDetectionCommand(p, store, cfgHolder, executor),
 		"hs",
 	)
 
 	// ── 6. Subscribe event handlers ───────────────────────────────────────────
 
 	// PlayerClientBrandEvent — brand string detection (generic + bedrock + forge brand).
-	event.Subscribe(p.Event(), 0, onBrandEvent(log, store, history, cfgHolder, executor))
+	event.Subscribe(p.Event(), 0, onBrandEvent(log, store, history, cfgHolder, executor, p.Command()))
 
 	// PlayerChannelRegisterEvent — channel-register detection (generic + forge mods from channels).
-	event.Subscribe(p.Event(), 0, onChannelRegisterEvent(log, store, history, cfgHolder, executor))
+	event.Subscribe(p.Event(), 0, onChannelRegisterEvent(log, store, history, cfgHolder, executor, p.Command()))
 
 	// PlayerModInfoEvent — Forge/NeoForge native handshake (primary forge path).
-	event.Subscribe(p.Event(), 0, onModInfoEvent(log, store, cfgHolder, executor))
+	event.Subscribe(p.Event(), 0, onModInfoEvent(log, store, cfgHolder, executor, p.Command()))
 
 	// PluginMessageEvent — lunar:apollo protobuf payload.
-	event.Subscribe(p.Event(), 0, onPluginMessageEvent(log, store, cfgHolder, executor))
+	event.Subscribe(p.Event(), 0, onPluginMessageEvent(log, store, cfgHolder, executor, p.Command()))
 
 	// ServerPostConnectEvent — player has fully joined a server; execute pending actions.
 	event.Subscribe(p.Event(), 0, onServerPostConnectEvent(log, store, cfgHolder, executor))
@@ -115,6 +132,7 @@ func onBrandEvent(
 	history *MessageHistory,
 	cfgHolder *configHolder,
 	executor *ActionExecutor,
+	commands *command.Manager,
 ) func(*proxy.PlayerClientBrandEvent) {
 	return func(e *proxy.PlayerClientBrandEvent) {
 		cfg := cfgHolder.get()
@@ -142,7 +160,7 @@ func onBrandEvent(
 			player.QueuePendingAction(func() {
 				actCtx := actCtx
 				actCtx.CheckName = triggerName
-				executor.Execute(actionIDs, actCtx, buildCallbacks(log, e.Player(), cfgHolder))
+				executor.Execute(actionIDs, actCtx, buildCallbacks(log, e.Player(), commands))
 			})
 		}
 
@@ -156,7 +174,7 @@ func onBrandEvent(
 			player.QueuePendingAction(func() {
 				actCtx := actCtx
 				actCtx.CheckName = triggerName
-				executor.Execute(actionIDs, actCtx, buildCallbacks(log, e.Player(), cfgHolder))
+				executor.Execute(actionIDs, actCtx, buildCallbacks(log, e.Player(), commands))
 			})
 		}
 
@@ -168,7 +186,7 @@ func onBrandEvent(
 			player.QueuePendingAction(func() {
 				ctx := actCtx
 				ctx.CheckName = "Spoofed Brand (Fabric)"
-				executor.Execute(actionIDs, ctx, buildCallbacks(log, e.Player(), cfgHolder))
+				executor.Execute(actionIDs, ctx, buildCallbacks(log, e.Player(), commands))
 			})
 		}
 
@@ -178,7 +196,7 @@ func onBrandEvent(
 			player.QueuePendingAction(func() {
 				actCtx := actCtx
 				actCtx.CheckName = label
-				executor.Execute(actionIDs, actCtx, buildCallbacks(log, e.Player(), cfgHolder))
+				executor.Execute(actionIDs, actCtx, buildCallbacks(log, e.Player(), commands))
 			})
 		}
 	}
@@ -192,6 +210,7 @@ func onChannelRegisterEvent(
 	history *MessageHistory,
 	cfgHolder *configHolder,
 	executor *ActionExecutor,
+	commands *command.Manager,
 ) func(*proxy.PlayerChannelRegisterEvent) {
 	return func(e *proxy.PlayerChannelRegisterEvent) {
 		cfg := cfgHolder.get()
@@ -223,7 +242,7 @@ func onChannelRegisterEvent(
 			player.QueuePendingAction(func() {
 				actCtx := actCtx
 				actCtx.CheckName = triggerName
-				executor.Execute(actionIDs, actCtx, buildCallbacks(log, e.Player(), cfgHolder))
+				executor.Execute(actionIDs, actCtx, buildCallbacks(log, e.Player(), commands))
 			})
 		}
 
@@ -237,7 +256,7 @@ func onChannelRegisterEvent(
 			player.QueuePendingAction(func() {
 				actCtx := actCtx
 				actCtx.CheckName = triggerName
-				executor.Execute(actionIDs, actCtx, buildCallbacks(log, e.Player(), cfgHolder))
+				executor.Execute(actionIDs, actCtx, buildCallbacks(log, e.Player(), commands))
 			})
 		}
 
@@ -249,7 +268,7 @@ func onChannelRegisterEvent(
 			player.QueuePendingAction(func() {
 				ctx := actCtx
 				ctx.CheckName = "Spoofed Brand (Fabric)"
-				executor.Execute(actionIDs, ctx, buildCallbacks(log, e.Player(), cfgHolder))
+				executor.Execute(actionIDs, ctx, buildCallbacks(log, e.Player(), commands))
 			})
 		}
 	}
@@ -262,6 +281,7 @@ func onModInfoEvent(
 	store *PlayerStore,
 	cfgHolder *configHolder,
 	executor *ActionExecutor,
+	commands *command.Manager,
 ) func(*proxy.PlayerModInfoEvent) {
 	return func(e *proxy.PlayerModInfoEvent) {
 		cfg := cfgHolder.get()
@@ -309,7 +329,7 @@ func onModInfoEvent(
 			player.QueuePendingAction(func() {
 				actCtx := actCtx
 				actCtx.CheckName = triggerName
-				executor.Execute(actionIDs, actCtx, buildCallbacks(log, e.Player(), cfgHolder))
+				executor.Execute(actionIDs, actCtx, buildCallbacks(log, e.Player(), commands))
 			})
 		}
 	}
@@ -321,6 +341,7 @@ func onPluginMessageEvent(
 	store *PlayerStore,
 	cfgHolder *configHolder,
 	executor *ActionExecutor,
+	commands *command.Manager,
 ) func(*proxy.PluginMessageEvent) {
 	return func(e *proxy.PluginMessageEvent) {
 		// Only interested in messages from players (not backend servers).
@@ -377,7 +398,7 @@ func onPluginMessageEvent(
 			player.QueuePendingAction(func() {
 				actCtx := actCtx
 				actCtx.CheckName = triggerName
-				executor.Execute(actionIDs, actCtx, buildCallbacks(log, gatePlayer, cfgHolder))
+				executor.Execute(actionIDs, actCtx, buildCallbacks(log, gatePlayer, commands))
 			})
 		}
 	}
@@ -443,19 +464,41 @@ func logDebug(log logr.Logger, enabled bool, msg string, keysAndValues ...any) {
 // buildCallbacks constructs the ActionCallbacks for a given player event.
 // Alert messages are broadcast to all online players with the hackedserver.alert permission.
 // Console commands are executed via the proxy command manager.
-func buildCallbacks(log logr.Logger, gatePlayer proxy.Player, cfgHolder *configHolder) ActionCallbacks {
+func buildCallbacks(log logr.Logger, gatePlayer proxy.Player, commands *command.Manager) ActionCallbacks {
 	return ActionCallbacks{
 		SendAlert: func(rendered string) {
-			log.Info("detection action alert", "player", gatePlayer.Username(), "message", rendered)
+			msg := mini.Parse(rendered)
+			if detectionProxy == nil {
+				return
+			}
+			for _, player := range detectionProxy.Players() {
+				if player.HasPermission("hackedserver.alert") {
+					_ = player.SendMessage(msg)
+				}
+			}
+			log.Info("detection action alert", "player", gatePlayer.Username())
 		},
 		ExecuteConsoleCommand: func(rendered string) {
-			log.Info("detection action console command", "player", gatePlayer.Username(), "cmd", rendered)
+			if err := commands.Do(context.Background(), consoleSource{}, strings.TrimPrefix(strings.TrimSpace(rendered), "/")); err != nil {
+				log.Error(err, "detection console command failed", "cmd", rendered)
+			}
 		},
 		ExecutePlayerCommand: func(rendered string) {
-			log.Info("detection action player command", "player", gatePlayer.Username(), "cmd", rendered)
+			if err := commands.Do(context.Background(), gatePlayer, strings.TrimPrefix(strings.TrimSpace(rendered), "/")); err != nil {
+				log.Error(err, "detection player command failed", "player", gatePlayer.Username())
+			}
 		},
 		ExecuteOppedPlayerCommand: func(rendered string) {
-			log.Info("detection action opped player command", "player", gatePlayer.Username(), "cmd", rendered)
+			// Gate has no public temporary-OP API; execute with the player's permissions.
+			if err := commands.Do(context.Background(), gatePlayer, strings.TrimPrefix(strings.TrimSpace(rendered), "/")); err != nil {
+				log.Error(err, "detection opped-player command failed", "player", gatePlayer.Username())
+			}
 		},
 	}
 }
+
+type consoleSource struct{}
+
+func (consoleSource) HasPermission(string) bool                                       { return true }
+func (consoleSource) PermissionValue(string) permission.TriState                      { return permission.True }
+func (consoleSource) SendMessage(component.Component, ...command.MessageOption) error { return nil }

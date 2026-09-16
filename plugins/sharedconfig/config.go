@@ -136,6 +136,7 @@ type VanishMessages struct {
 
 var (
 	once    sync.Once
+	mu      sync.RWMutex
 	loaded  *Config
 	loadErr error
 )
@@ -170,8 +171,31 @@ func Load() (*Config, error) {
 		normalize(&cfg)
 		loaded = &cfg
 	}
+	mu.RLock()
+	cfg, err := loaded, loadErr
+	mu.RUnlock()
+	return cfg, err
+}
 
-	return loaded, loadErr
+// Reload rereads plugged.yml and atomically replaces the cached configuration.
+// Missing files restore defaults; malformed files leave the previous snapshot
+// untouched and return the parse error.
+func Reload() (*Config, error) {
+	cfg := defaultConfig()
+	b, err := os.ReadFile(defaultConfigFile)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("read %s: %w", defaultConfigFile, err)
+		}
+	} else if err := yaml.Unmarshal(b, &cfg); err != nil {
+		return nil, fmt.Errorf("unmarshal %s: %w", defaultConfigFile, err)
+	}
+	normalize(&cfg)
+	mu.Lock()
+	loaded = &cfg
+	loadErr = nil
+	mu.Unlock()
+	return &cfg, nil
 }
 
 func (c *Config) FormatMessage(pluginName string, message string) string {

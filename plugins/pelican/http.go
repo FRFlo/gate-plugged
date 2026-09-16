@@ -7,53 +7,49 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"path"
-	"strings"
+	"time"
 )
 
 type HttpClient struct {
-	Token string
-	Url   string
+	Token  string
+	URL    string
+	client *http.Client
 }
 
 func NewHttpClient(token, url string) *HttpClient {
 	return &HttpClient{
-		Token: token,
-		Url:   url,
+		Token:  token,
+		URL:    url,
+		client: &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
 // buildUrl combines the base URL with the provided endpoint path.
-func (c *HttpClient) buildUrl(endpoint string) (string, string, error) {
-	base, err := url.Parse(c.Url)
+func (c *HttpClient) buildUrl(endpoint string) (string, error) {
+	base, err := url.Parse(c.URL)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
-	base.Path = path.Join("api", "client", endpoint)
-	host := base.Host
-	// Remove port if present for Host header, if you want only the domain
-	if colon := strings.Index(host, ":"); colon != -1 {
-		host = host[:colon]
+	if base.Scheme != "https" && base.Scheme != "http" || base.Host == "" {
+		return "", fmt.Errorf("invalid Pelican URL %q", c.URL)
 	}
-	return base.String(), host, nil
+	joined, err := url.JoinPath(base.String(), "api", "client", endpoint)
+	return joined, err
 }
 
 // Get sends a GET request to the specified endpoint and returns the response body.
 func (c *HttpClient) Get(endpoint string) ([]byte, error) {
-	fullUrl, host, err := c.buildUrl(endpoint)
+	fullURL, err := c.buildUrl(endpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	req, err := http.NewRequest("GET", fullUrl, nil)
+	req, err := http.NewRequest("GET", fullURL, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.Token))
-	req.Host = host
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -65,15 +61,15 @@ func (c *HttpClient) Get(endpoint string) ([]byte, error) {
 	}(resp.Body)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("GET %s returned status %d", fullUrl, resp.StatusCode)
+		return nil, fmt.Errorf("GET %s returned status %d", fullURL, resp.StatusCode)
 	}
 
-	return io.ReadAll(resp.Body)
+	return io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 }
 
 // Post sends a POST request with a JSON body to the specified endpoint and returns the response body.
 func (c *HttpClient) Post(endpoint string, body interface{}) ([]byte, error) {
-	fullUrl, host, err := c.buildUrl(endpoint)
+	fullURL, err := c.buildUrl(endpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -83,16 +79,13 @@ func (c *HttpClient) Post(endpoint string, body interface{}) ([]byte, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", fullUrl, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequest("POST", fullURL, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.Token))
 	req.Header.Set("Content-Type", "application/json")
-	req.Host = host
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -104,10 +97,10 @@ func (c *HttpClient) Post(endpoint string, body interface{}) ([]byte, error) {
 	}(resp.Body)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("POST %s returned status %d", fullUrl, resp.StatusCode)
+		return nil, fmt.Errorf("POST %s returned status %d", fullURL, resp.StatusCode)
 	}
 
-	return io.ReadAll(resp.Body)
+	return io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 }
 
 func (c *HttpClient) StartServer(server string) error {

@@ -2,6 +2,7 @@ package detection
 
 import (
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -79,6 +80,7 @@ func (ImmediateClock) AfterFunc(_ time.Duration, fn func()) {
 // It is intentionally stateless beyond the config snapshot it holds — callers
 // may create one at startup and reuse it for the plugin's lifetime.
 type ActionExecutor struct {
+	mu       sync.RWMutex
 	actions  ActionsConfig
 	settings MainSettings
 	clock    Clock
@@ -110,7 +112,9 @@ func newActionExecutorWithClock(actions ActionsConfig, settings MainSettings, cl
 // different delays do not block each other.
 func (e *ActionExecutor) Execute(actionIDs []string, ctx ActionContext, cb ActionCallbacks) {
 	for _, id := range actionIDs {
+		e.mu.RLock()
 		def, ok := e.actions.Actions[id]
+		e.mu.RUnlock()
 		if !ok {
 			continue
 		}
@@ -122,6 +126,14 @@ func (e *ActionExecutor) Execute(actionIDs []string, ctx ActionContext, cb Actio
 			e.perform(actionDef, ctx, cb)
 		})
 	}
+}
+
+// Reload atomically replaces the action configuration used by future actions.
+func (e *ActionExecutor) Reload(actions ActionsConfig, settings MainSettings) {
+	e.mu.Lock()
+	e.actions = actions
+	e.settings = settings
+	e.mu.Unlock()
 }
 
 // resolveDelay returns the effective delay for a single ActionDef.
@@ -136,11 +148,14 @@ func (e *ActionExecutor) Execute(actionIDs []string, ctx ActionContext, cb Actio
 //	if def.DelayTicks != nil → use *def.DelayTicks
 //	else → use settings.ActionDelayTicks
 func (e *ActionExecutor) resolveDelay(def ActionDef) time.Duration {
+	e.mu.RLock()
+	settings := e.settings
+	e.mu.RUnlock()
 	var ticks int64
 	if def.DelayTicks != nil {
 		ticks = *def.DelayTicks
 	} else {
-		ticks = e.settings.ActionDelayTicks
+		ticks = settings.ActionDelayTicks
 	}
 	if ticks <= 0 {
 		return 0

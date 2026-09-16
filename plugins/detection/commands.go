@@ -106,8 +106,13 @@ func newDetectionCommand(
 	p *proxy.Proxy,
 	store *PlayerStore,
 	cfgHolder *configHolder,
+	executors ...*ActionExecutor,
 ) brigodier.LiteralNodeBuilder {
 	const playerArg = "player"
+	var executor *ActionExecutor
+	if len(executors) > 0 {
+		executor = executors[0]
+	}
 
 	return brigodier.Literal("detection").
 		Executes(command.Command(func(c *command.Context) error {
@@ -121,7 +126,7 @@ func newDetectionCommand(
 		Then(
 			brigodier.Literal("reload").
 				Executes(command.Command(func(c *command.Context) error {
-					return handleReload(c, cfgHolder)
+					return handleReload(c, cfgHolder, executor)
 				})),
 		).
 		Then(
@@ -171,9 +176,17 @@ func playerNames(proxy *proxy.Proxy) []string {
 }
 
 // handleReload reloads the TOML configuration from the submodule.
-func handleReload(c *command.Context, cfgHolder *configHolder) error {
+func handleReload(c *command.Context, cfgHolder *configHolder, executor *ActionExecutor) error {
 	if err := cfgHolder.reload(); err != nil {
 		return c.Source.SendMessage(detectionMessage(chatfmt.ApplyPlaceholders(detectionMessages.ReloadFailed, map[string]string{"error": fmt.Sprintf("%v", err)})))
+	}
+	if cfg, err := sharedcfg.Reload(); err == nil {
+		detectionPrefix = cfg.Plugins.Detection.Prefix
+		detectionMessages = cfg.Plugins.Detection.Messages
+		if executor != nil {
+			current := cfgHolder.get()
+			executor.Reload(current.Actions, current.Main.Settings)
+		}
 	}
 	return c.Source.SendMessage(detectionMessage(detectionMessages.ReloadSuccess))
 }

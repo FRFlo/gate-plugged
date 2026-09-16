@@ -24,4 +24,5 @@ config:
     logPingRequests: false
   forwarding:
     mode: velocity
-    velocitySecret: 2tN8Wv3yQp9Kf6Ld1sR4mX7cBj0Hu5Za
+    # Set this in the deployed configuration; never commit the real secret.
+    velocitySecret: CHANGE_ME

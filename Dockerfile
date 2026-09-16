@@ -12,6 +12,7 @@ RUN go mod download
 COPY plugins ./plugins
 COPY util ./util
 COPY gate.go ./
+COPY HackedServer/hackedserver-core/src/main/resources ./HackedServer/hackedserver-core/src/main/resources
 
 # Automatically provided by the buildkit
 ARG TARGETOS TARGETARCH
@@ -23,5 +24,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
 # Move binary into final image
 FROM --platform=$BUILDPLATFORM gcr.io/distroless/static-debian11 AS app
 COPY --from=build /workspace/gate /
-#COPY config.yml /
+COPY config.yml /
+COPY plugged.yml /
+WORKDIR /
 CMD ["/gate"]
