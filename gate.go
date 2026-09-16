@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/minekube/gate-plugin-template/plugins/commands"
 	"github.com/minekube/gate-plugin-template/plugins/detection"
 	"github.com/minekube/gate-plugin-template/plugins/pelican"
 	"github.com/minekube/gate-plugin-template/plugins/vanish"
@@ -14,6 +15,7 @@ func main() {
 	// Here we register our plugins with the proxy.
 	proxy.Plugins = append(proxy.Plugins, pelican.Plugin)
 	proxy.Plugins = append(proxy.Plugins, detection.Plugin)
+	proxy.Plugins = append(proxy.Plugins, commands.Plugin)
 	proxy.Plugins = append(proxy.Plugins, vanish.Plugin)
 
 	// Simply execute Gate as if it was a normal Go program.

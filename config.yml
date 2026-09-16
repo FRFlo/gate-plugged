@@ -3,9 +3,9 @@ config:
   requireBuiltinCommandPermissions: false
   onlineMode: true
   servers:
-    folia: 127.0.0.1:25566
+    limbo: limbo:25566
   try:
-    - folia
+    - limbo
   status:
     motd: |
       §6§lBAGUETTECRAFT §f- §bLes Creepers sont polis ici

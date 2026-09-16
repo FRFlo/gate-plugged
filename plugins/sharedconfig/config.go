@@ -34,6 +34,39 @@ type PluginsConfig struct {
 	Pelican   PelicanConfig   `yaml:"pelican"`
 	Detection DetectionConfig `yaml:"detection"`
 	Vanish    VanishConfig    `yaml:"vanish"`
+	Kick      KickConfig      `yaml:"kick"`
+	F3        F3Config        `yaml:"customF3Brand"`
+	Auth      AuthConfig      `yaml:"loginPassword"`
+}
+
+type KickConfig struct {
+	Messages KickMessages `yaml:"messages"`
+}
+type KickMessages struct {
+	ConsoleOnly    string `yaml:"consoleOnly"`
+	Usage          string `yaml:"usage"`
+	PlayerNotFound string `yaml:"playerNotFound"`
+	Kicked         string `yaml:"kicked"`
+}
+
+type F3Config struct {
+	Enabled bool   `yaml:"enabled"`
+	Brand   string `yaml:"brand"`
+}
+type AuthConfig struct {
+	Enabled        bool         `yaml:"enabled"`
+	LoginServer    string       `yaml:"loginServer"`
+	HubServer      string       `yaml:"hubServer"`
+	Passwords      []string     `yaml:"passwords"`
+	Command        string       `yaml:"command"`
+	TimeoutSeconds int          `yaml:"timeoutSeconds"`
+	Messages       AuthMessages `yaml:"messages"`
+}
+type AuthMessages struct {
+	ConsoleOnly string `yaml:"consoleOnly"`
+	Invalid     string `yaml:"invalid"`
+	Timeout     string `yaml:"timeout"`
+	Success     string `yaml:"success"`
 }
 
 type PelicanConfig struct {
@@ -162,41 +195,51 @@ func defaultConfig() Config {
 			},
 		},
 		Plugins: PluginsConfig{
+			Kick: KickConfig{Messages: KickMessages{
+				ConsoleOnly:    "<red>Cette commande est réservée à la console.</red>",
+				Usage:          "<gold>Usage : /kick [joueur] [raison]</gold>",
+				PlayerNotFound: "<red>Joueur introuvable : {player}</red>",
+				Kicked:         "<red>Vous avez été expulsé.</red>\n<gray>Raison : {reason}</gray>",
+			}},
+			F3: F3Config{Brand: "Gate"},
+			Auth: AuthConfig{LoginServer: "limbo", HubServer: "", Command: "login", TimeoutSeconds: 60, Messages: AuthMessages{
+				ConsoleOnly: "<red>Cette commande est réservée aux joueurs.</red>", Invalid: "<red>Mot de passe invalide.</red>", Timeout: "<red>Délai d'authentification dépassé.</red>", Success: "<green>Authentification réussie.</green>",
+			}},
 			Pelican: PelicanConfig{
-				Token:    "Your Pelican token",
+				Token:    "Votre token Pelican",
 				URL:      "https://demo.pelican.dev",
 				Prefix:   "<gray>[<aqua>Pelican</aqua>]</gray> ",
 				AutoStop: true,
 				Delay:    60,
 				Servers: map[string]string{
-					"server1": "The UUID of the server you want to connect to",
+					"server1": "UUID du serveur auquel se connecter",
 				},
 				Messages: PelicanMessages{
-					ServerStartingWait: "<yellow>Server is starting, please wait...</yellow>",
-					ErrorStarting:      "<red>Error starting server</red>",
-					StartingServer:     "<yellow>Starting server...</yellow>",
+					ServerStartingWait: "<yellow>Le serveur démarre, veuillez patienter...</yellow>",
+					ErrorStarting:      "<red>Erreur lors du démarrage du serveur</red>",
+					StartingServer:     "<yellow>Démarrage du serveur...</yellow>",
 				},
 			},
 			Detection: DetectionConfig{
 				Prefix: "<gray>[<aqua>HackedServer</aqua>]</gray> ",
 				Messages: DetectionMessages{
-					AvailableCommands:  "<gray>Available commands</gray>",
-					HelpReload:         "<dark_gray>/hs <gray>reload <dark_gray>» <gray>reload the plugin</gray>",
-					HelpCheck:          "<dark_gray>/hs <gray>check <aqua>target</aqua> <dark_gray>» <gray>check player detected mods</gray>",
-					HelpList:           "<dark_gray>/hs <gray>list <dark_gray>» <gray>list all spotted players</gray>",
-					ReloadFailed:       "<red>Reload failed: {error}</red>",
-					ReloadSuccess:      "<green>Successfully reloaded</green>",
-					PlayerNotFound:     "<red>Player not found: {player}</red>",
-					Checking:           "<aqua>Checking <gold>{player}</gold></aqua>",
-					DetectedMods:       "<green>Detected mods:</green>",
-					NoModsDetected:     "<green>No mods detected</green>",
-					ForgeMods:          "<green>Forge/NeoForge mods:</green>",
-					NoForgeMods:        "<green>No Forge mods detected</green>",
-					LunarMods:          "<green>Lunar Client mods:</green>",
-					NoLunarMods:        "<green>No Lunar Client mods detected</green>",
-					BedrockDetected:    "<green>Bedrock: yes</green>",
-					NoPlayersSpotted:   "<green>No chocolate players spotted</green>",
-					SpottedPlayers:     "<green>Spotted players:</green>",
+					AvailableCommands:  "<gray>Commandes disponibles</gray>",
+					HelpReload:         "<dark_gray>/hs <gray>reload <dark_gray>» <gray>recharger le plugin</gray>",
+					HelpCheck:          "<dark_gray>/hs <gray>check <aqua>cible</aqua> <dark_gray>» <gray>vérifier les mods détectés</gray>",
+					HelpList:           "<dark_gray>/hs <gray>list <dark_gray>» <gray>lister les joueurs repérés</gray>",
+					ReloadFailed:       "<red>Échec du rechargement : {error}</red>",
+					ReloadSuccess:      "<green>Rechargement réussi</green>",
+					PlayerNotFound:     "<red>Joueur introuvable : {player}</red>",
+					Checking:           "<aqua>Vérification de <gold>{player}</gold></aqua>",
+					DetectedMods:       "<green>Mods détectés :</green>",
+					NoModsDetected:     "<green>Aucun mod détecté</green>",
+					ForgeMods:          "<green>Mods Forge/NeoForge :</green>",
+					NoForgeMods:        "<green>Aucun mod Forge détecté</green>",
+					LunarMods:          "<green>Mods Lunar Client :</green>",
+					NoLunarMods:        "<green>Aucun mod Lunar Client détecté</green>",
+					BedrockDetected:    "<green>Bedrock : oui</green>",
+					NoPlayersSpotted:   "<green>Aucun joueur repéré</green>",
+					SpottedPlayers:     "<green>Joueurs repérés :</green>",
 					ListBullet:         "<dark_gray>- <gold>{value}</gold></dark_gray>",
 					ModBullet:          "<dark_gray>- {value}</dark_gray>",
 					ModVersionBullet:   "<dark_gray>- {value} ({version})</dark_gray>",
@@ -207,17 +250,17 @@ func defaultConfig() Config {
 			Vanish: VanishConfig{
 				Prefix: "<gray>[<aqua>Vanish</aqua>]</gray> ",
 				Messages: VanishMessages{
-					NoPermission:       "<red>You do not have permission.</red>",
-					OnlyPlayers:        "<red>Only players can use /vanish without a target.</red>",
-					NoPermissionOthers: "<red>You do not have permission to target others.</red>",
-					ProxyUnavailable:   "<red>Proxy is unavailable for player lookup.</red>",
-					PlayerNotFound:     "<red>Player not found: {player}</red>",
-					TargetUnavailable:  "<red>Target unavailable.</red>",
-					StateEnabled:       "<green>enabled</green>",
-					StateDisabled:      "<red>disabled</red>",
+					NoPermission:       "<red>Vous n'avez pas la permission.</red>",
+					OnlyPlayers:        "<red>Seuls les joueurs peuvent utiliser /vanish sans cible.</red>",
+					NoPermissionOthers: "<red>Vous n'avez pas la permission de viser d'autres joueurs.</red>",
+					ProxyUnavailable:   "<red>Le proxy est indisponible pour rechercher le joueur.</red>",
+					PlayerNotFound:     "<red>Joueur introuvable : {player}</red>",
+					TargetUnavailable:  "<red>Cible indisponible.</red>",
+					StateEnabled:       "<green>activé</green>",
+					StateDisabled:      "<red>désactivé</red>",
 					ToggleSelf:         "<gray>Vanish {state}<gray>.</gray></gray>",
-					ToggleOther:        "<gray>Vanish {state}<gray> for <gold>{player}</gold>.</gray></gray>",
-					ToggleTarget:       "<gray>Your vanish is now {state}<gray>.</gray></gray>",
+					ToggleOther:        "<gray>Vanish {state}<gray> pour <gold>{player}</gold>.</gray></gray>",
+					ToggleTarget:       "<gray>Votre vanish est maintenant {state}<gray>.</gray></gray>",
 				},
 			},
 		},
