@@ -117,8 +117,8 @@ func newVanishCommand(p *proxy.Proxy, s *store, log logr.Logger) brigodier.Liter
 
 	return brigodier.Literal("vanish").
 		Executes(command.Command(func(c *command.Context) error {
-			if !c.Source.HasPermission(permCommand) {
-				return c.Source.SendMessage(vanishMessage(vanishMessages.NoPermission))
+			if !c.HasPermission(permCommand) {
+				return c.SendMessage(vanishMessage(vanishMessages.NoPermission))
 			}
 
 			self, ok := c.Source.(proxy.Player)
@@ -132,21 +132,21 @@ func newVanishCommand(p *proxy.Proxy, s *store, log logr.Logger) brigodier.Liter
 			brigodier.Argument(playerArg, brigodier.String).
 				Suggests(playerSuggestionProvider(p, s)).
 				Executes(command.Command(func(c *command.Context) error {
-					if !c.Source.HasPermission(permCommand) {
-						return c.Source.SendMessage(vanishMessage(vanishMessages.NoPermission))
+					if !c.HasPermission(permCommand) {
+						return c.SendMessage(vanishMessage(vanishMessages.NoPermission))
 					}
-					if !c.Source.HasPermission(permOthers) {
-						return c.Source.SendMessage(vanishMessage(vanishMessages.NoPermissionOthers))
+					if !c.HasPermission(permOthers) {
+						return c.SendMessage(vanishMessage(vanishMessages.NoPermissionOthers))
 					}
 
 					if p == nil {
-						return c.Source.SendMessage(vanishMessage(vanishMessages.ProxyUnavailable))
+						return c.SendMessage(vanishMessage(vanishMessages.ProxyUnavailable))
 					}
 
 					targetName := c.String(playerArg)
 					target := p.PlayerByName(targetName)
 					if target == nil {
-						return c.Source.SendMessage(vanishMessage(chatfmt.ApplyPlaceholders(vanishMessages.PlayerNotFound, map[string]string{"player": targetName})))
+						return c.SendMessage(vanishMessage(chatfmt.ApplyPlaceholders(vanishMessages.PlayerNotFound, map[string]string{"player": targetName})))
 					}
 
 					return toggleTargetVanish(c, p, s, log, target)
@@ -160,7 +160,7 @@ func playerSuggestionProvider(p *proxy.Proxy, s *store) brigodier.SuggestionProv
 			return b.Build()
 		}
 
-		viewerCanSeeVanished := c.Source.HasPermission(permSeeVanished)
+		viewerCanSeeVanished := c.HasPermission(permSeeVanished)
 		names := make([]string, 0)
 		if p != nil {
 			names = make([]string, 0, len(p.Players()))
@@ -185,7 +185,7 @@ func canManageOthers(src command.Source) bool {
 
 func toggleTargetVanish(c *command.Context, p *proxy.Proxy, s *store, log logr.Logger, target proxy.Player) error {
 	if target == nil {
-		return c.Source.SendMessage(vanishMessage(vanishMessages.TargetUnavailable))
+		return c.SendMessage(vanishMessage(vanishMessages.TargetUnavailable))
 	}
 
 	vanished := s.Toggle(gateUUIDToGoogle(target.ID()))
@@ -197,10 +197,10 @@ func toggleTargetVanish(c *command.Context, p *proxy.Proxy, s *store, log logr.L
 	}
 
 	if target.Username() == sourceName(c.Source) {
-		return c.Source.SendMessage(vanishMessage(chatfmt.ApplyPlaceholders(vanishMessages.ToggleSelf, map[string]string{"state": state})))
+		return c.SendMessage(vanishMessage(chatfmt.ApplyPlaceholders(vanishMessages.ToggleSelf, map[string]string{"state": state})))
 	}
 
-	if err := c.Source.SendMessage(vanishMessage(chatfmt.ApplyPlaceholders(vanishMessages.ToggleOther, map[string]string{"state": state, "player": target.Username()}))); err != nil {
+	if err := c.SendMessage(vanishMessage(chatfmt.ApplyPlaceholders(vanishMessages.ToggleOther, map[string]string{"state": state, "player": target.Username()}))); err != nil {
 		return err
 	}
 

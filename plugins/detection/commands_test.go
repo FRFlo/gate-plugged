@@ -325,7 +325,7 @@ func TestCommandCheckList(t *testing.T) {
 		posFabric := strings.Index(msg, "fabric")
 		posLaby := strings.Index(msg, "labymod_v1")
 		posZap := strings.Index(msg, "zap_client")
-		if !(posFabric < posLaby && posLaby < posZap) {
+		if posFabric >= posLaby || posLaby >= posZap {
 			t.Fatalf("checks not sorted alphabetically: %q", msg)
 		}
 	})
@@ -472,7 +472,7 @@ func TestCommandCheckList(t *testing.T) {
 		posAlice := strings.Index(msg, "Alice")
 		posMike := strings.Index(msg, "Mike")
 		posZara := strings.Index(msg, "Zara")
-		if !(posAlice < posMike && posMike < posZara) {
+		if posAlice >= posMike || posMike >= posZara {
 			t.Fatalf("list entries not sorted alphabetically: %q", msg)
 		}
 	})
@@ -509,69 +509,4 @@ func fakeCommandContext(src command.Source) *command.Context {
 	// Execute a no-op command through the manager to get a real context.
 	// Since we just need Source injection we build a minimal stub.
 	return &command.Context{Source: src}
-}
-
-// fakePlayer is a minimal stand-in for proxy.Player used in unit tests.
-// It carries just the fields that handleCheck/handleList access.
-type fakePlayer struct {
-	id       guuid.UUID
-	username string
-}
-
-// handleCheckWithPlayer is a test-only variant of handleCheck that accepts a
-// fakePlayer instead of going through proxy.PlayerByName.  This avoids the
-// need for a real *proxy.Proxy in tests that focus on output formatting.
-func handleCheckWithPlayer(
-	c *command.Context,
-	player *fakePlayer,
-	store *PlayerStore,
-	cfgHolder *configHolder,
-) error {
-	dp := store.Get(player.id)
-	cfg := cfgHolder.get()
-
-	var b strings.Builder
-	b.WriteString("Detection info for " + player.username + ":\n")
-
-	checks := dp.GenericChecks()
-	sortStrings(checks)
-	if len(checks) > 0 {
-		b.WriteString("  Generic checks: " + strings.Join(checks, ", ") + "\n")
-	} else {
-		b.WriteString("  Generic checks: none\n")
-	}
-
-	if cfg.Forge.Settings.ShowModsInCheck && dp.HasForgeModsData() {
-		mods := dp.ForgeMods()
-		if len(mods) > 0 {
-			b.WriteString("  Forge mods:\n")
-			for _, m := range mods {
-				b.WriteString("    - " + m.ModID + "\n")
-			}
-		}
-	}
-
-	if cfg.Lunar.Enabled && cfg.Lunar.Settings.ShowModsInCheck && dp.HasLunarModsData() {
-		mods := dp.LunarMods()
-		if len(mods) > 0 {
-			b.WriteString("  Lunar mods:\n")
-			for _, m := range mods {
-				b.WriteString("    - " + m.ID + "\n")
-			}
-		}
-	}
-
-	if dp.IsBedrockDetected() {
-		b.WriteString("  Bedrock: yes\n")
-	}
-
-	return c.Source.SendMessage(&component.Text{Content: b.String()})
-}
-
-func sortStrings(ss []string) {
-	for i := 1; i < len(ss); i++ {
-		for j := i; j > 0 && ss[j] < ss[j-1]; j-- {
-			ss[j], ss[j-1] = ss[j-1], ss[j]
-		}
-	}
 }

@@ -178,7 +178,7 @@ func playerNames(proxy *proxy.Proxy) []string {
 // handleReload reloads the TOML configuration from the submodule.
 func handleReload(c *command.Context, cfgHolder *configHolder, executor *ActionExecutor) error {
 	if err := cfgHolder.reload(); err != nil {
-		return c.Source.SendMessage(detectionMessage(chatfmt.ApplyPlaceholders(detectionMessages.ReloadFailed, map[string]string{"error": fmt.Sprintf("%v", err)})))
+		return c.SendMessage(detectionMessage(chatfmt.ApplyPlaceholders(detectionMessages.ReloadFailed, map[string]string{"error": fmt.Sprintf("%v", err)})))
 	}
 	if cfg, err := sharedcfg.Reload(); err == nil {
 		detectionPrefix = cfg.Plugins.Detection.Prefix
@@ -188,7 +188,7 @@ func handleReload(c *command.Context, cfgHolder *configHolder, executor *ActionE
 			executor.Reload(current.Actions, current.Main.Settings)
 		}
 	}
-	return c.Source.SendMessage(detectionMessage(detectionMessages.ReloadSuccess))
+	return c.SendMessage(detectionMessage(detectionMessages.ReloadSuccess))
 }
 
 // handleCheck shows detected mod information for the named player.
@@ -202,7 +202,7 @@ func handleCheck(
 	// Look up online player by name.
 	target := p.PlayerByName(username)
 	if target == nil {
-		return c.Source.SendMessage(detectionMessage(chatfmt.ApplyPlaceholders(detectionMessages.PlayerNotFound, map[string]string{"player": username})))
+		return c.SendMessage(detectionMessage(chatfmt.ApplyPlaceholders(detectionMessages.PlayerNotFound, map[string]string{"player": username})))
 	}
 
 	return formatCheckOutput(c, target.Username(), store.Get(gateUUIDToGoogle(target.ID())), cfgHolder.get())
@@ -279,7 +279,7 @@ func formatCheckOutput(
 		b.WriteString(detectionMessages.BedrockDetected + "\n")
 	}
 
-	return c.Source.SendMessage(detectionMessage(strings.TrimRight(b.String(), "\n")))
+	return c.SendMessage(detectionMessage(strings.TrimRight(b.String(), "\n")))
 }
 
 // handleList lists all online players that have at least one generic check triggered.
@@ -311,7 +311,7 @@ type namedCheckEntry struct {
 // Extracted for testability without a real *proxy.Proxy.
 func handleListFromEntries(c *command.Context, entries []namedCheckEntry) error {
 	if len(entries) == 0 {
-		return c.Source.SendMessage(detectionMessage(detectionMessages.NoPlayersSpotted))
+		return c.SendMessage(detectionMessage(detectionMessages.NoPlayersSpotted))
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
@@ -323,7 +323,7 @@ func handleListFromEntries(c *command.Context, entries []namedCheckEntry) error 
 	for _, e := range entries {
 		b.WriteString(chatfmt.ApplyPlaceholders(detectionMessages.ListBullet, map[string]string{"value": e.name}) + "\n")
 	}
-	return c.Source.SendMessage(detectionMessage(strings.TrimRight(b.String(), "\n")))
+	return c.SendMessage(detectionMessage(strings.TrimRight(b.String(), "\n")))
 }
 
 func detectionMessage(message string) component.Component {

@@ -278,7 +278,7 @@ func (p *DetectedPlayer) MarkFabricChannels() {
 func (p *DetectedPlayer) TryMarkSpoofedBrand(enabled bool) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if !enabled || p.fabricChannels == false || p.brand == "" {
+	if !enabled || !p.fabricChannels || p.brand == "" {
 		return false
 	}
 	brand := strings.ToLower(strings.TrimSpace(p.brand))

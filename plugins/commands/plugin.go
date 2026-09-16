@@ -47,14 +47,14 @@ func newLoginCommand(p *proxy.Proxy, cfg sharedcfg.AuthConfig, state *authState)
 		brigodier.Argument("password", brigodier.String).Executes(command.Command(func(c *command.Context) error {
 			player, ok := c.Source.(proxy.Player)
 			if !ok {
-				return c.Source.SendMessage(render(cfg.Messages.ConsoleOnly))
+				return c.SendMessage(render(cfg.Messages.ConsoleOnly))
 			}
 			id := player.ID()
 			state.mu.Lock()
 			_, waiting := state.pending[id]
 			state.mu.Unlock()
 			if !waiting || !contains(cfg.Passwords, c.String("password")) {
-				return c.Source.SendMessage(render(cfg.Messages.Invalid))
+				return c.SendMessage(render(cfg.Messages.Invalid))
 			}
 			state.mu.Lock()
 			delete(state.pending, id)
@@ -68,7 +68,7 @@ func newLoginCommand(p *proxy.Proxy, cfg sharedcfg.AuthConfig, state *authState)
 					_, _ = player.CreateConnectionRequest(s).Connect(context.Background())
 				}
 			}
-			return c.Source.SendMessage(render(cfg.Messages.Success))
+			return c.SendMessage(render(cfg.Messages.Success))
 		})),
 	)
 }
@@ -86,12 +86,12 @@ func newKickCommand(p *proxy.Proxy, messages sharedcfg.KickMessages) brigodier.L
 				brigodier.Argument("reason", brigodier.StringPhrase).
 					Executes(command.Command(func(c *command.Context) error {
 						if _, ok := c.Source.(proxy.Player); ok {
-							return c.Source.SendMessage(render(messages.ConsoleOnly))
+							return c.SendMessage(render(messages.ConsoleOnly))
 						}
 						name := c.String("player")
 						target := p.PlayerByName(name)
 						if target == nil {
-							return c.Source.SendMessage(render(replace(messages.PlayerNotFound, "player", name)))
+							return c.SendMessage(render(replace(messages.PlayerNotFound, "player", name)))
 						}
 						reason := strings.TrimSpace(c.String("reason"))
 						if reason == "" {
