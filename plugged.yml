@@ -1,3 +1,6 @@
+# Values below can be overridden in Docker without editing this file:
+# using the YAML path in uppercase snake case, prefixed with PLUGGED_. For
+# example: plugins.pelican.token => PLUGGED_PLUGINS_PELICAN_TOKEN.
 global:
   chat:
     format:

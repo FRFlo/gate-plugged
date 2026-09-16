@@ -1,3 +1,6 @@
+# Gate configuration can be overridden through its GATE_* environment variables
+# (for example GATE_CONFIG_BIND and GATE_CONFIG_ONLINE_MODE). The forwarding
+# secret is read from GATE_VELOCITY_SECRET.
 config:
   bind: 0.0.0.0:25565
   requireBuiltinCommandPermissions: false
@@ -24,5 +27,4 @@ config:
     logPingRequests: false
   forwarding:
     mode: velocity
-    # Set this in the deployed configuration; never commit the real secret.
-    velocitySecret: CHANGE_ME
+    # Set GATE_VELOCITY_SECRET in the container environment.

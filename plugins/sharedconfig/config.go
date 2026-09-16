@@ -148,6 +148,8 @@ func Load() (*Config, error) {
 		b, err := os.ReadFile(defaultConfigFile)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
+				normalize(&cfg)
+				applyEnv(&cfg)
 				loaded = &cfg
 				return
 			}
@@ -163,12 +165,14 @@ func Load() (*Config, error) {
 		}
 
 		normalize(&cfg)
+		applyEnv(&cfg)
 		loaded = &cfg
 	})
 
 	if loaded == nil {
 		cfg := defaultConfig()
 		normalize(&cfg)
+		applyEnv(&cfg)
 		loaded = &cfg
 	}
 	mu.RLock()
@@ -191,6 +195,7 @@ func Reload() (*Config, error) {
 		return nil, fmt.Errorf("unmarshal %s: %w", defaultConfigFile, err)
 	}
 	normalize(&cfg)
+	applyEnv(&cfg)
 	mu.Lock()
 	loaded = &cfg
 	loadErr = nil
@@ -324,6 +329,79 @@ func normalize(cfg *Config) {
 		cfg.Plugins.Vanish.Prefix = "<gray>[<aqua>Vanish</aqua>]</gray> "
 	}
 	normalizeVanishMessages(&cfg.Plugins.Vanish.Messages)
+}
+
+// applyEnv lets container deployments override any plugged.yml value without
+// mounting or rewriting a configuration file.
+func applyEnv(cfg *Config) {
+	applyGenericEnv(cfg)
+}
+
+// applyGenericEnv maps every YAML scalar to one environment variable. For
+// example, plugins.pelican.messages.errorStarting becomes
+// PLUGGED_PLUGINS_PELICAN_MESSAGES_ERROR_STARTING. This deliberately walks
+// the marshalled config instead of a hand-maintained list, so new keys work
+// without a code change.
+func applyGenericEnv(cfg *Config) {
+	b, err := yaml.Marshal(cfg)
+	if err != nil {
+		return
+	}
+	var document yaml.Node
+	if err := yaml.Unmarshal(b, &document); err != nil || len(document.Content) == 0 {
+		return
+	}
+	applyEnvNode(document.Content[0], []string{"PLUGGED"})
+	b, err = yaml.Marshal(&document)
+	if err != nil {
+		return
+	}
+	_ = yaml.Unmarshal(b, cfg)
+}
+
+func applyEnvNode(node *yaml.Node, path []string) {
+	if node.Kind == yaml.MappingNode {
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			key, value := node.Content[i], node.Content[i+1]
+			applyEnvNode(value, append(path, envSegment(key.Value)))
+		}
+		return
+	}
+	if node.Kind == yaml.SequenceNode {
+		if value, ok := os.LookupEnv(strings.Join(path, "_")); ok {
+			var replacement yaml.Node
+			if yaml.Unmarshal([]byte("["+value+"]"), &replacement) == nil {
+				sequence := &replacement
+				if sequence.Kind == yaml.DocumentNode && len(sequence.Content) == 1 {
+					sequence = sequence.Content[0]
+				}
+				if sequence.Kind == yaml.SequenceNode {
+					node.Content = sequence.Content
+				}
+			}
+		}
+		return
+	}
+	if node.Kind == yaml.ScalarNode {
+		if value, ok := os.LookupEnv(strings.Join(path, "_")); ok {
+			node.Value = value
+		}
+	}
+}
+
+func envSegment(value string) string {
+	var result strings.Builder
+	for i, r := range value {
+		if r >= 'A' && r <= 'Z' && i > 0 {
+			result.WriteByte('_')
+		}
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			result.WriteByte(byte(strings.ToUpper(string(r))[0]))
+		} else {
+			result.WriteByte('_')
+		}
+	}
+	return result.String()
 }
 
 func normalizeDetectionMessages(m *DetectionMessages) {
